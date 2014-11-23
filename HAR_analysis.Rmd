@@ -1,0 +1,124 @@
+---
+title: "Weight Lifting Excercises: Qualitative Activity Recognition"
+author: "Jose Reyes-Valdes"
+date: "November 21, 2014"
+output: html_document
+---
+
+**Introduction**
+
+In the present work estimates of quality of of weigth lifting excerises is performed. The analysis takes as a base the study documented in the article Qualitative Activity Recognition of **Weight Lifting Exercises** of Eduardo Velloso and others authors. This kind of study is part of the so called Human Activity Recognition (HAR).
+
+Document is divided in three stages: first part, exploratory analysis deals with incomplete data, where those variables wich meany NA's are not considered, second part performs an random forest model to variables selected; third part performs cross validation and prediction for supplied 20 testing cases. 
+
+In order to optimize time proccess, model analysis is run with about 15% random sample of training set. After verify program is running the model is applied with wole data for 19,621 cases documented.
+
+
+**Exploratory analysis**
+
+Explloratori analysis was used to identify thos variables numeric and with no NA. Summary of variables was generated. This is just a little sample of statistics for variables selected.
+
+```{r, echo=FALSE}
+training <- read.csv("pml-training.csv", sep = ",");
+testing <- read.csv("pml-testing.csv", sep = ",");
+
+s1 <- summary(training$roll_belt);
+s2 <- summary(training$pitch_belt);
+s3 <- summary(training$yaw_belt);
+s <- rbind(s1,s2, s3);
+print(s);
+
+print(lapply(training[, c("roll_belt", "pitch_belt")], summary));
+```
+
+Part of exploratory was done un first stage of Random Forest Model application. This consists in analyse about 15% of total population to test code an performance of the model. 
+
+**Random Forest Model**
+
+After exploring data, numerical variables which cover three main aspects of numerical variables are considered. Belt, Arm and Dumbbell sensors included 24 variables associated to gyroscope, acceleration, roll, pitch and yaw features.
+
+Cariables used are: roll_belt, pitch_belt, yaw_belt, gyros_arm_x, gyros_arm_y, gyros_arm_z, gyros_belt_x, gyros_belt_y, gyros_belt_z, accel_belt_x, accel_belt_y, accel_belt_z, roll_arm, pitch_arm, yaw_arm, accel_arm_x, accel_arm_y, accel_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, magnet_arm_x, magnet_arm_y, magnet_arm_z.
+
+Given we have a large sample, is divaded in three population subsets: one of 60% of size, second of 20% and third of 20%. First one is assigned as training, second one as testing and third one for VALIDATION.
+
+Once subsets are defined, the validation set is divided in to subsets: training validation of 70% and testing validation of 30%.
+
+```{r random_forest, echo=FALSE}
+library(caret);
+fit.train <- training[, c("classe", "roll_belt", "pitch_belt", "yaw_belt", "gyros_arm_x", "gyros_arm_y", "gyros_arm_z", "gyros_belt_x", "gyros_belt_y", "gyros_belt_z", "accel_belt_x", "accel_belt_y", "accel_belt_z", "roll_arm", "pitch_arm", "yaw_arm", "accel_arm_x", "accel_arm_y", "accel_arm_z", "roll_dumbbell", "pitch_dumbbell", "yaw_dumbbell", "magnet_arm_x", "magnet_arm_y", "magnet_arm_z")];   
+
+n.train <- nrow(fit.train);
+fit.train.smpl <- fit.train[sample(1:n.train, n.train), ];
+inTrain <- createDataPartition(y = fit.train.smpl$classe, p = 0.6, list = FALSE);
+train <- fit.train.smpl[inTrain, ];   
+testTmp <- fit.train.smpl[-inTrain, ];
+
+inTrain2 <- createDataPartition(y = testTmp$classe, p = 0.5, list = FALSE);
+test <- testTmp[inTrain2, ];
+sampleVal <- testTmp[-inTrain2, ];
+
+fit.test <- testing[, c("roll_belt", "pitch_belt", "yaw_belt", "gyros_arm_x", "gyros_arm_y", "gyros_arm_z", "gyros_belt_x", "gyros_belt_y", "gyros_belt_z", "accel_belt_x", "accel_belt_y", "accel_belt_z", "roll_arm", "pitch_arm", "yaw_arm", "accel_arm_x", "accel_arm_y", "accel_arm_z", "roll_dumbbell", "pitch_dumbbell", "yaw_dumbbell", "magnet_arm_x", "magnet_arm_y", "magnet_arm_z")];
+
+modFit <- train(classe ~ ., method = "rf", data = train, prox = TRUE);
+print(modFit);
+
+pred1 <- predict(modFit, newdata = test);
+tbl <- table(pred1, test$classe);
+conf.mtx <- confusionMatrix(tbl);
+print(conf.mtx);
+plot(as.table(conf.mtx), col = "bisque2", main = "Testing Confusion Matrix");
+
+pred2 <- predict(modFit, newdata = fit.test);
+print(summary(pred2));
+barplot(summary(pred2), col = c("bisque1", "bisque3"), main = "Predictions for Testing");
+
+print(pred2);
+
+pml_write_files = function(x){
+   n = length(x)
+   for(i in 1:n){
+      filename = paste0("predictions/problem_id_",i,".txt")
+      write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }   
+   }
+
+pml_write_files(pred2);
+
+# VALIDATION
+inTrain.val <- createDataPartition(y = sampleVal$classe, p = 0.7, list = FALSE);
+train.val <- sampleVal[inTrain.val, ];
+test.val <- sampleVal[-inTrain.val, ];
+
+modFitVal <- train(classe ~ ., method = "rf", data = train.val, prox = TRUE);
+print(modFitVal);
+
+predVal <- predict(modFitVal, newdata = test.val);
+tblVal <- table(predVal, test.val$classe);
+confMtx <- confusionMatrix(tblVal);
+print(confMtx);
+plot(as.table(confMtx), col = "bisque2", main = "Validation Confusion Matrix");
+
+predVal2 <- predict(modFitVal, newdata = fit.test);
+print(summary(predVal2));
+barplot(summary(predVal2), col = c("bisque1", "bisque3"), main = "Predictions for Validation");
+
+#    print(conf.mtx);
+```
+
+
+**Analysis of results**
+
+Time consumed for precessing Random Forest model for 19,621 cases was 3hours 40min aprox.
+
+Plots for empirical distribution of prediction for testing and validate sets are given. To show graphically the accuracy of estimation, plots of confusion matrix for testing and validate sets are added. 
+
+Accuracy on testing set is 0.94 compared with 0.98 of validating set. The difference is reasonable since validating size is a third part of training part. Confidence inerval for testing prediction is (0.9741, 0.9833) and (0.9215, 0.9502) for validating.
+
+Balanced accuracy for different factors range from 0.97 to 0.99 for testing set and from 0.95 to 0.97 for valiating set. Kappa value is 0.92 for validating set while for testng set is 0.97. These results are consistent with accuracy for both sets
+
+
+**Conclusions**
+
+With samples of 60% for trining, 20% for testing and 20% for validating, compared predictions of testing and validating are consistent. There is an equlibrium for sensitvity and specifity precision rounding 0.96 for validating and 0.99 for testing.
+
+Because the amount of data computing time consumed was hight, but as a result high level prediction was achieved for predictions in testing and validating test. Standard errors for accuracy where small for both prediction sets. The predicions for validating set were as expected based on results obtained in training-testing set.
